@@ -1,0 +1,23 @@
+{
+  "name": "mentorlagbe-server",
+  "version": "1.0.0",
+  "description": "Backend API server for MentorLagbe tuition and mentorship platform",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "seed": "node src/scripts/seed.js"
+  },
+  "dependencies": {
+    "@better-auth/mongo-adapter": "^1.7.26",
+    "better-auth": "^1.7.26",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^6.22.0",
+    "stripe": "^17.7.0"
+  },
+  "keywords": []
+}
