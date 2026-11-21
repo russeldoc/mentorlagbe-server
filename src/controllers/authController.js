@@ -1,5 +1,5 @@
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import { auth } from "../config/auth.js";
 import { getCollections } from "../config/db.js";
 
 function signUserJwt(user) {
@@ -15,75 +15,104 @@ function signUserJwt(user) {
     );
 }
 
-/**
- * Syncs a user record in the `users` collection and returns a signed JWT.
- * Supports registration role selection ('student' | 'tutor') with default plan: 'free'.
- */
-export async function syncSessionAndIssueJwt(req, res, next) {
-    try {
-        const { email, name, image, role, phone, bio } = req.body;
+function hashPassword(password) {
+    const salt = crypto.randomBytes(16).toString("hex");
+    const derivedKey = crypto.scryptSync(password, salt, 64).toString("hex");
+    return `${salt}:${derivedKey}`;
+}
 
-        if (!email) {
-            return res.status(400).json({ message: "Email is required to issue token." });
+function verifyPassword(password, storedHash) {
+    if (!storedHash || !storedHash.includes(":")) return false;
+    const [salt, originalHex] = storedHash.split(":");
+    const derivedBuf = crypto.scryptSync(password, salt, 64);
+    const originalBuf = Buffer.from(originalHex, "hex");
+    if (derivedBuf.length !== originalBuf.length) return false;
+    return crypto.timingSafeEqual(derivedBuf, originalBuf);
+}
+
+function sanitizeUser(userDoc) {
+    const { passwordHash, ...safeUser } = userDoc;
+    return safeUser;
+}
+
+/**
+ * POST /api/auth-session/register
+ * Creates a new user with a salted scrypt passwordHash, role ('student' | 'tutor'), and plan: 'free'.
+ */
+export async function registerUser(req, res, next) {
+    try {
+        const { name, email, password, role, phone, bio, image } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: "Name, email, and password are required." });
+        }
+        if (String(password).length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters." });
         }
 
         const normalizedEmail = email.trim().toLowerCase();
         const { users } = getCollections();
 
-        // Check BetterAuth session headers if provided
-        let sessionUser = null;
-        try {
-            const session = await auth.api.getSession({ headers: req.headers });
-            if (session?.user) {
-                sessionUser = session.user;
-            }
-        } catch {
-            // Optional session lookup fallback
+        const existing = await users.findOne({ email: normalizedEmail });
+        if (existing) {
+            return res.status(409).json({ message: "An account with this email already exists." });
         }
 
-        const existingUser = await users.findOne({ email: normalizedEmail });
+        const assignedRole = role === "tutor" ? "tutor" : "student";
+        const newDoc = {
+            name: name.trim(),
+            email: normalizedEmail,
+            passwordHash: hashPassword(String(password)),
+            image: image || "",
+            role: assignedRole,
+            phone: phone || "",
+            bio: bio || "",
+            plan: "free",
+            createdAt: new Date(),
+        };
 
-        // Only allow 'student' or 'tutor' during self-registration/sync; preserve existing 'admin' role
-        const requestedRole = role === "tutor" ? "tutor" : "student";
+        const insertResult = await users.insertOne(newDoc);
+        const createdUser = { ...newDoc, _id: insertResult.insertedId };
+        const token = signUserJwt(createdUser);
 
-        if (!existingUser) {
-            const newDoc = {
-                name: (name || sessionUser?.name || normalizedEmail.split("@")[0]).trim(),
-                email: normalizedEmail,
-                image: image || sessionUser?.image || "",
-                role: sessionUser?.role === "admin" ? "admin" : requestedRole,
-                phone: phone || "",
-                bio: bio || "",
-                plan: "free",
-                createdAt: new Date(),
-            };
+        return res.status(201).json({
+            token,
+            user: sanitizeUser(createdUser),
+        });
+    } catch (error) {
+        next(error);
+    }
+}
 
-            const insertResult = await users.insertOne(newDoc);
-            const createdUser = { ...newDoc, _id: insertResult.insertedId };
-            const token = signUserJwt(createdUser);
+/**
+ * POST /api/auth-session/login
+ * Verifies email + password against passwordHash and issues a JWT.
+ */
+export async function loginUser(req, res, next) {
+    try {
+        const { email, password } = req.body;
 
-            return res.status(200).json({
-                token,
-                user: createdUser,
-            });
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required." });
         }
 
-        const updates = {};
-        if (name && name.trim()) updates.name = name.trim();
-        if (typeof image === "string") updates.image = image;
-        if (typeof phone === "string") updates.phone = phone;
-        if (typeof bio === "string") updates.bio = bio;
+        const normalizedEmail = email.trim().toLowerCase();
+        const { users } = getCollections();
 
-        if (Object.keys(updates).length > 0) {
-            await users.updateOne({ _id: existingUser._id }, { $set: updates });
+        const userDoc = await users.findOne({ email: normalizedEmail });
+        if (!userDoc || !userDoc.passwordHash) {
+            return res.status(401).json({ message: "Invalid email or password." });
         }
 
-        const updatedUser = await users.findOne({ _id: existingUser._id });
-        const token = signUserJwt(updatedUser);
+        const isValid = verifyPassword(String(password), userDoc.passwordHash);
+        if (!isValid) {
+            return res.status(401).json({ message: "Invalid email or password." });
+        }
 
+        const token = signUserJwt(userDoc);
         return res.status(200).json({
             token,
-            user: updatedUser,
+            user: sanitizeUser(userDoc),
         });
     } catch (error) {
         next(error);
