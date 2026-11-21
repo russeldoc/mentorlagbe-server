@@ -15,7 +15,25 @@ export async function createApplication(req, res, next) {
             return res.status(400).json({ message: "Invalid tuition ID." });
         }
 
-        const { tuitions, applications } = getCollections();
+        const { tuitions, applications, users } = getCollections();
+
+        // Enforce 1-application limit for Free-plan students
+        const studentDoc = await users.findOne({ email: req.user.email });
+        const isPro = studentDoc?.plan === "pro";
+
+        if (!isPro) {
+            const existingCount = await applications.countDocuments({
+                studentEmail: req.user.email,
+            });
+
+            if (existingCount >= 1) {
+                return res.status(403).json({
+                    message:
+                        "Free plan allows applying to only 1 tuition. Upgrade to Pro Student for unlimited tuition applications.",
+                });
+            }
+        }
+
         const tuition = await tuitions.findOne({ _id: objectId });
 
         if (!tuition || tuition.approvalStatus !== "approved" || !tuition.isActive) {
