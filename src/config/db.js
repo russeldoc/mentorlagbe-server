@@ -8,30 +8,44 @@ if (!uri) {
     throw new Error("MONGODB_URI is not defined in environment variables.");
 }
 
-const client = new MongoClient(uri);
 const dbName = new URL(uri).pathname.replace("/", "") || "mentorlagbe";
+const client = new MongoClient(uri, {
+    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 10000,
+});
 const db = client.db(dbName);
 
-let isConnected = false;
+let connectionPromise = null;
+let indexesEnsured = false;
 
 export async function connectDB() {
-    if (isConnected) {
+    if (client.topology && client.topology.isConnected()) {
         return { client, db };
     }
-    await client.connect();
-    isConnected = true;
-    console.log(`Connected to MongoDB database: ${db.databaseName}`);
 
-    // Ensure helpful indexes
-    await Promise.all([
-        db.collection("users").createIndex({ email: 1 }, { unique: true }),
-        db.collection("tuitions").createIndex({ approvalStatus: 1, isActive: 1, createdAt: -1 }),
-        db.collection("tuitions").createIndex({ title: "text", subject: "text" }),
-        db.collection("applications").createIndex({ tuitionId: 1, studentEmail: 1 }, { unique: true }),
-        db.collection("payments").createIndex({ stripeSessionId: 1 }, { unique: true, sparse: true }),
-    ]);
+    if (!connectionPromise) {
+        connectionPromise = (async () => {
+            await client.connect();
+            console.log(`Connected to MongoDB database: ${db.databaseName}`);
 
-    return { client, db };
+            if (!indexesEnsured) {
+                await Promise.all([
+                    db.collection("users").createIndex({ email: 1 }, { unique: true }),
+                    db.collection("tuitions").createIndex({ approvalStatus: 1, isActive: 1, createdAt: -1 }),
+                    db.collection("tuitions").createIndex({ title: "text", subject: "text" }),
+                    db.collection("applications").createIndex({ tuitionId: 1, studentEmail: 1 }, { unique: true }),
+                    db.collection("payments").createIndex({ stripeSessionId: 1 }, { unique: true, sparse: true }),
+                ]);
+                indexesEnsured = true;
+            }
+
+            return { client, db };
+        })().finally(() => {
+            connectionPromise = null;
+        });
+    }
+
+    return connectionPromise;
 }
 
 export function getCollections() {
@@ -45,7 +59,7 @@ export function getCollections() {
 }
 
 export function toObjectId(id) {
-    if (!ObjectId.isValid(id)) return null;
+    if (!id || !ObjectId.isValid(id)) return null;
     return new ObjectId(id);
 }
 
