@@ -11,9 +11,10 @@ export const auth = betterAuth({
     basePath: "/api/auth",
     secret: process.env.BETTER_AUTH_SECRET,
     trustedOrigins: [
-        process.env.CLIENT_URL || "http://localhost:3000",
+        process.env.CLIENT_URL,
+        "https://mentorlagbe-client-kappa.vercel.app",
         "http://localhost:3000",
-    ],
+    ].filter(Boolean),
     database: mongodbAdapter(db, { client }),
     emailAndPassword: {
         enabled: true,
@@ -21,30 +22,10 @@ export const auth = betterAuth({
     },
     user: {
         additionalFields: {
-            role: {
-                type: "string",
-                required: false,
-                defaultValue: "student",
-                input: true,
-            },
-            phone: {
-                type: "string",
-                required: false,
-                defaultValue: "",
-                input: true,
-            },
-            bio: {
-                type: "string",
-                required: false,
-                defaultValue: "",
-                input: true,
-            },
-            plan: {
-                type: "string",
-                required: false,
-                defaultValue: "free",
-                input: false,
-            },
+            role: { type: "string", required: false, defaultValue: "student", input: true },
+            phone: { type: "string", required: false, defaultValue: "", input: true },
+            bio: { type: "string", required: false, defaultValue: "", input: true },
+            plan: { type: "string", required: false, defaultValue: "free", input: false },
         },
     },
     plugins: [admin()],

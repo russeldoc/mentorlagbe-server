@@ -17,11 +17,12 @@ const app = express();
 
 const allowedOrigins = [
     process.env.CLIENT_URL,
+    "https://mentorlagbe-client-kappa.vercel.app",
     "http://localhost:3000",
 ].filter(Boolean);
 
-// allows your own team's Vercel preview deployments
-const vercelPreview = /^https:\/\/mentorlagbe-client[a-z0-9-]*-russeldoc\.vercel\.app$/;
+// allows your Vercel preview deployments of the client
+const vercelPreview = /^https:\/\/mentorlagbe-client[a-z0-9-]*\.vercel\.app$/;
 
 app.use(
     cors({
@@ -29,7 +30,7 @@ app.use(
             if (!origin || allowedOrigins.includes(origin) || vercelPreview.test(origin)) {
                 return callback(null, true);
             }
-            return callback(null, false); // reject cleanly instead of throwing
+            return callback(null, false);
         },
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -53,7 +54,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Health check
 app.get("/api/health", (req, res) => {
-    res.status(200).json({ status: "ok", service: "MentorLagbe API" });
+    res.status(200).json({ status: "ok", service: "MentorLagbe API", cors: "v2" });
 });
 
 // MongoDB Health Check
