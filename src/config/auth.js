@@ -1,3 +1,4 @@
+// src/config/auth.js
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { admin } from "better-auth/plugins";
