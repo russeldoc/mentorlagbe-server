@@ -11,6 +11,8 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import statsRoutes from "./routes/statsRoutes.js";
 import { notFoundHandler, errorHandler } from "./middlewares/errorHandler.js";
 
+// import { connectDB, db } from "./config/db.js";
+
 const app = express();
 
 const allowedOrigins = [
@@ -18,15 +20,20 @@ const allowedOrigins = [
     "http://localhost:3000",
 ].filter(Boolean);
 
+// allows your own team's Vercel preview deployments
+const vercelPreview = /^https:\/\/mentorlagbe-client[a-z0-9-]*-russeldoc\.vercel\.app$/;
+
 app.use(
     cors({
         origin(origin, callback) {
-            if (!origin || allowedOrigins.includes(origin)) {
+            if (!origin || allowedOrigins.includes(origin) || vercelPreview.test(origin)) {
                 return callback(null, true);
             }
-            return callback(new Error("Not allowed by CORS"));
+            return callback(null, false); // reject cleanly instead of throwing
         },
         credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization"],
     })
 );
 
@@ -48,6 +55,26 @@ app.use(express.urlencoded({ extended: true }));
 app.get("/api/health", (req, res) => {
     res.status(200).json({ status: "ok", service: "MentorLagbe API" });
 });
+
+// MongoDB Health Check
+// app.get("/api/db-health", async (req, res) => {
+//     try {
+//         await connectDB();
+//         await db.command({ ping: 1 });
+
+//         res.status(200).json({
+//             status: "ok",
+//             message: "MongoDB connected successfully",
+//         });
+//     } catch (error) {
+//         console.error("MongoDB connection failed:", error);
+
+//         res.status(500).json({
+//             status: "error",
+//             message: "MongoDB connection failed",
+//         });
+//     }
+// });
 
 // Application routes
 app.use("/api/auth-session", authRoutes);
