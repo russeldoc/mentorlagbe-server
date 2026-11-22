@@ -11,7 +11,7 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import statsRoutes from "./routes/statsRoutes.js";
 import { notFoundHandler, errorHandler } from "./middlewares/errorHandler.js";
 
-// import { connectDB, db } from "./config/db.js";
+// import { connectDB } from "./config/db.js";
 
 const app = express();
 
